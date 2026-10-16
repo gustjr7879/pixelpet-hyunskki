@@ -26,14 +26,21 @@ public static class PPMouse {
 $A = [System.Windows.Automation.AutomationElement]
 $root = $A::FromHandle([IntPtr][long]$env:PP_HWND)
 $cond = New-Object System.Windows.Automation.PropertyCondition($A::ControlTypeProperty, [System.Windows.Automation.ControlType]::TabItem)
-$wants = @($env:PP_TABS -split "`n" | Where-Object { $_ })
+$mark = $env:PP_MARK
+$want = $env:PP_TABS
 for ($try = 0; $try -lt 15; $try++) {
     $tabs = New-Object System.Collections.ArrayList
     foreach ($e in $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $cond)) { [void]$tabs.Add($e) }
-    foreach ($want in $wants) {
+    foreach ($pass in @('mark', 'title')) {
         $hits = New-Object System.Collections.ArrayList
         foreach ($e in $tabs) {
-            if (($e.Current.Name -replace '^[^\w(\[]+', '').Trim() -eq $want) { [void]$hits.Add($e) }
+            $name = $e.Current.Name
+            if ($pass -eq 'mark') {
+                if ($mark -and $name.Contains($mark)) { [void]$hits.Add($e) }
+            } elseif ($want) {
+                $plain = ($name -replace '[\u200b-\u200d\u2060]', '' -replace '^[^\w(\[]+', '').Trim()
+                if ($plain -eq $want) { [void]$hits.Add($e) }
+            }
         }
         if ($hits.Count -eq 1) {   # skip if several tabs share the title
             $t = $hits[0]

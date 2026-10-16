@@ -36,8 +36,17 @@ def console_info(pid):
         return _console_info(pid)
 
 
-def swap_console_title(pid, new, only_if=None):
-    """콘솔 제목을 new 로 바꾸고 이전 제목을 돌려준다 (only_if 가 있으면 현재 제목이 같을 때만)."""
+ZERO_WIDTH = "​‌‍⁠"
+
+
+def invisible_mark():
+    """화면에 보이지 않는 폭 0 문자로 만든 고유 표식."""
+    n = random.getrandbits(24)
+    return "⁠" + "".join(ZERO_WIDTH[(n >> (2 * i)) & 3] for i in range(12))
+
+
+def _swap_title(pid, make_new):
+    """콘솔 제목을 make_new(현재 제목) 으로 바꾸고 이전 제목을 돌려준다 (None 이면 안 바꿈)."""
     with _con_lock:
         _k32.FreeConsole()
         if not _k32.AttachConsole(pid):
@@ -45,11 +54,22 @@ def swap_console_title(pid, new, only_if=None):
         try:
             buf = ctypes.create_unicode_buffer(1024)
             _k32.GetConsoleTitleW(buf, 1024)
-            if only_if is None or buf.value == only_if:
+            new = make_new(buf.value)
+            if new is not None:
                 _k32.SetConsoleTitleW(new)
             return buf.value
         finally:
             _k32.FreeConsole()
+
+
+def add_title_mark(pid, mark):
+    """보이는 제목은 그대로 두고 끝에 보이지 않는 표식만 붙인다."""
+    return _swap_title(pid, lambda cur: cur + mark)
+
+
+def remove_title_mark(pid, mark):
+    """표식이 아직 붙어 있으면 떼어낸다 (그사이 Claude 가 제목을 새로 썼으면 건드리지 않음)."""
+    _swap_title(pid, lambda cur: cur.replace(mark, "") if mark in cur else None)
 
 
 def _console_info(pid):
@@ -120,8 +140,8 @@ def window_text(hwnd):
 def focus(hwnd, tab_title="", pid=None):
     """창을 앞으로 가져오고, Windows Terminal 탭을 전환한다.
 
-    pid(claude 프로세스)가 있으면 그 콘솔 제목을 잠깐 고유 표식으로 바꿔서 탭을 정확히 찾는다
-    → 제목이 'Claude Code' 그대로이거나 같은 이름의 탭이 여럿이어도 동작.
+    pid(claude 프로세스)가 있으면 그 콘솔 제목 끝에 보이지 않는 표식을 잠깐 붙여 탭을 정확히 찾는다
+    → 보이는 세션 이름은 그대로이고, 'Claude Code' 그대로이거나 같은 이름의 탭이 여럿이어도 동작.
     """
     if not hwnd or not _u32.IsWindow(hwnd):
         return False
@@ -139,18 +159,17 @@ def focus(hwnd, tab_title="", pid=None):
 
 
 def _select_tab(hwnd, want, pid):
-    marker, orig = "", None
+    mark = ""
     if pid:
-        marker = f"PixelPet-{os.getpid()}-{random.randrange(1 << 30)}"
-        orig = swap_console_title(pid, marker)
+        mark = invisible_mark()
+        orig = add_title_mark(pid, mark)
         if orig is None:
-            marker = ""
+            mark = ""
         elif clean_title(orig):
             want = clean_title(orig)
-    wants = "\n".join(t for t in (marker, want) if t)
-    if not wants:
+    if not (mark or want):
         return
-    env = dict(os.environ, PP_HWND=str(int(hwnd)), PP_TABS=wants)
+    env = dict(os.environ, PP_HWND=str(int(hwnd)), PP_MARK=mark, PP_TABS=want)
     try:
         subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
                         "-File", os.path.join(APP_DIR, "select_tab.ps1")],
@@ -158,5 +177,5 @@ def _select_tab(hwnd, want, pid):
     except Exception:
         pass
     finally:
-        if marker:   # 원래 제목 복원 (그사이 Claude 가 제목을 바꿨으면 그대로 둔다)
-            swap_console_title(pid, orig, only_if=marker)
+        if mark:
+            remove_title_mark(pid, mark)
