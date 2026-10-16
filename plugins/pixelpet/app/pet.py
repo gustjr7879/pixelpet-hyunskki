@@ -24,6 +24,7 @@ sys.path.insert(0, APP_DIR)
 import autostart  # noqa: E402
 import proctree  # noqa: E402
 import runtime  # noqa: E402
+import usage  # noqa: E402
 import winfocus  # noqa: E402
 
 PORT = runtime.PORT
@@ -341,6 +342,8 @@ class App:
         self.frame_no = 0
         self.last_alert = 0.0
         self.expanded = False
+        self.view = "alerts"      # alerts | usage
+        self.usage_drawn = 0.0
         self.open_cards = set()
         self.new_labels = []
         self.panel_visible = False
@@ -631,7 +634,9 @@ class App:
                     relief="raised", padx=4 * F, pady=F, highlightthickness=0, takefocus=0)
         self.btn_onoff = tk.Button(bar, command=self.toggle_enabled, **tbtn)
         self.btn_onoff.pack(side="left")
-        tk.Button(bar, text="모두 정리", command=self.clear_all, **tbtn).pack(side="left", padx=3 * F)
+        tk.Button(bar, text="모두 정리", command=self.clear_all, **tbtn).pack(side="left", padx=(3 * F, 0))
+        self.btn_usage = tk.Button(bar, text="사용량", command=self.toggle_usage, **tbtn)
+        self.btn_usage.pack(side="left", padx=3 * F)
         self.btn_expand = tk.Button(bar, command=self.toggle_expand, **tbtn)
 
         well = tk.Frame(self.content, bg=FACE, bd=2 * F, relief="sunken")
@@ -788,6 +793,9 @@ class App:
         n_done = sum(1 for s in self.sessions.values() if s.status == "done")
         n_unread = sum(1 for s in self.sessions.values() if s.unread)
         self.status.configure(text=f" 작업중 {n_work} · 완료 {n_done} · 새 알림 {n_unread}")
+        in_usage = self.view == "usage"
+        self.btn_usage.configure(relief="sunken" if in_usage else "raised",
+                                 bg="#d4d0c8" if in_usage else FACE)
         if not self.panel_visible or self.settings.get("collapsed"):
             if self.panel_visible:
                 self.place_panel()
@@ -798,17 +806,19 @@ class App:
             w.destroy()
         self.new_labels = []
         sessions = self.sorted_sessions()
-        if len(sessions) <= VISIBLE_LIMIT:
+        if len(sessions) <= VISIBLE_LIMIT or in_usage:
             self.expanded = False
-        shown = sessions if self.expanded else sessions[:VISIBLE_LIMIT]
-        if not shown:
+        shown = [] if in_usage else sessions if self.expanded else sessions[:VISIBLE_LIMIT]
+        if in_usage:
+            self.build_usage()
+        elif not shown:
             tk.Label(self.inner, text="\n  알림이 없어요. zZ\n", font=self.f_body, bg="#808080",
                      fg="#ffffff", anchor="w").pack(fill="x")
         for s in shown:
             self.build_card(s)
         tk.Frame(self.inner, bg="#808080", height=2 * self.F).pack(fill="x")
 
-        extra = len(sessions) - VISIBLE_LIMIT
+        extra = 0 if in_usage else len(sessions) - VISIBLE_LIMIT
         if extra > 0:
             self.btn_expand.configure(text="접기 ▲" if self.expanded else f"펼치기 ▼ (+{extra})")
             self.btn_expand.pack(side="right")
@@ -829,6 +839,68 @@ class App:
             self.list_cv.configure(height=h)
             self.list_cv.yview_moveto(0)
         self.place_panel()
+
+    # ── 사용량 탭 ──
+    def build_usage(self):
+        F = self.F
+        self.usage_drawn = time.time()
+        installed = usage.claude_relay_installed()
+        for agent, tag, color, u in (("claude", " CLAUDE ", CLAUDE_C, usage.read_claude()),
+                                     ("codex", " CODEX ", CODEX_C, usage.read_codex())):
+            card = tk.Frame(self.inner, bg=FACE, bd=2 * F, relief="raised")
+            card.pack(fill="x", padx=2 * F, pady=(2 * F, 0))
+            head = tk.Frame(card, bg=color)
+            head.pack(fill="x")
+            tk.Label(head, text=tag, font=self.f_small, bg=INK, fg="#ffffff").pack(
+                side="left", padx=(2 * F, 3 * F), pady=2 * F)
+            title = "사용량" + (f" · {u['plan'].upper()}" if u and u.get("plan") else "")
+            tk.Label(head, text=title, font=self.f_bold, bg=color, fg="#ffffff").pack(side="left")
+            if u and u["limits"]:
+                tk.Label(head, text=usage.fmt_ago(u["ts"]) + " 기준", font=self.f_small,
+                         bg=color, fg="#ffffff").pack(side="right", padx=3 * F)
+            body = tk.Frame(card, bg=CREAM)
+            body.pack(fill="x")
+            if u and u["limits"]:
+                for label, pct, resets in u["limits"]:
+                    self.usage_row(body, label, pct, resets, color)
+                tk.Frame(body, bg=CREAM, height=2 * F).pack()
+                continue
+            if agent == "claude" and not installed:
+                hint = "연결이 필요해요.\nClaude Code에서 /pixelpet:usage 를 실행하세요."
+            elif agent == "claude":
+                hint = "Claude가 한 번 답하면 표시돼요.\n(Pro/Max 구독만 한도 정보가 있어요)"
+            else:
+                hint = "Codex 사용 기록이 아직 없어요.\nCodex를 한 번 쓰면 표시돼요."
+            tk.Label(body, text=hint, font=self.f_small, bg=CREAM, fg="#6a6050", justify="left",
+                     anchor="w").pack(fill="x", padx=6 * F, pady=4 * F)
+        tk.Label(self.inner, text=" 각 앱이 마지막으로 알려준 값이에요", font=self.f_small,
+                 bg="#808080", fg="#e8e8e8", anchor="w").pack(fill="x", pady=(2 * F, 0))
+
+    def usage_row(self, parent, label, pct, resets, color):
+        """5시간 [■■■■■□□□□□] 47%  +  초기화 시각 (90년대 세그먼트 진행바)."""
+        F = self.F
+        row = tk.Frame(parent, bg=CREAM)
+        row.pack(fill="x", padx=5 * F, pady=(4 * F, 0))
+        tk.Label(row, text=label, font=self.f_bold, bg=CREAM, fg=INK, width=5, anchor="w").pack(side="left")
+        tk.Label(row, text=f"{pct:.0f}%", font=self.f_bold, bg=CREAM, width=4, anchor="e",
+                 fg="#c0102a" if pct >= 90 else INK).pack(side="right")
+        segs, sw, gap, h = 20, 7 * F, F, 9 * F
+        bar = tk.Canvas(row, width=segs * (sw + gap) + 3 * F, height=h + 4 * F, bg="#ffffff",
+                        highlightthickness=0, bd=F, relief="sunken")
+        bar.pack(side="left", padx=4 * F)
+        fill = "#e8364f" if pct >= 90 else "#e0a21b" if pct >= 70 else color
+        n = max(1, round(pct / 100 * segs)) if pct > 0 else 0
+        for i in range(segs):
+            x = 2 * F + i * (sw + gap)
+            bar.create_rectangle(x, 2 * F, x + sw, 2 * F + h, outline="", fill=fill if i < n else "#e6e1d2")
+        reset = usage.fmt_reset(resets)
+        if reset:
+            tk.Label(parent, text=reset, font=self.f_small, bg=CREAM, fg="#8a8070",
+                     anchor="e").pack(fill="x", padx=6 * F)
+
+    def toggle_usage(self):
+        self.view = "alerts" if self.view == "usage" else "usage"
+        self.render()
 
     def place_panel(self):
         self._place_now()
@@ -897,6 +969,7 @@ class App:
             s.unread = False
         self.open_cards.clear()
         self.expanded = False
+        self.view = "alerts"
         self.render()
 
     def dismiss(self, key):
@@ -1035,6 +1108,7 @@ class App:
                                        winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_NODEFAULT)
                 except Exception:
                     pass
+            self.view = "alerts"   # 새 알림이 오면 알림 목록으로
             self.show_panel()
         self.dirty = True
 
@@ -1097,7 +1171,7 @@ class App:
             return
         if cmd and not runtime.DEBUG:
             return
-        if cmd in ("toggle_expand", "toggle_collapse", "toggle_enabled", "clear_all", "show_panel",
+        if cmd in ("toggle_expand", "toggle_collapse", "toggle_enabled", "clear_all", "toggle_usage", "show_panel",
                    "hide_panel", "test_alert"):
             getattr(self, cmd)()
             return
@@ -1302,6 +1376,8 @@ class App:
                 for s in sorted(self.sessions.values(), key=lambda s: s.updated)[: len(self.sessions) - 80]:
                     if s.status not in ("working", "waiting"):
                         self.sessions.pop(s.key, None)
+            if self.view == "usage" and self.panel_visible and time.time() - self.usage_drawn > 20:
+                self.dirty = True   # 사용량 탭은 20초마다 다시 읽는다
         except Exception as ex:
             print("poll error:", ex, file=sys.stderr)
         self.root.after(1500, self.poll)

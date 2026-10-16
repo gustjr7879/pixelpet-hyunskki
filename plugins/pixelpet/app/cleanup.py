@@ -1,4 +1,4 @@
-"""PixelPet 정리: 펫 종료 + Codex 훅 제거 + 시작프로그램 해제 + %LOCALAPPDATA%\\PixelPet 삭제.
+"""PixelPet 정리: 펫 종료 + Codex 훅 제거 + 상태줄 복원 + 시작프로그램 해제 + %LOCALAPPDATA%\\PixelPet 삭제.
 
 플러그인 자체(Claude 훅)는 `/plugin uninstall pixelpet@pixelpet-hyunskki` 로 제거한다.
 """
@@ -22,6 +22,8 @@ def main():
             pass
         time.sleep(1)
     subprocess.run([sys.executable, os.path.join(runtime.SRC_APP, "codex_setup.py"), "--remove"])
+    if os.path.exists(os.path.join(runtime.DATA_DIR, "statusline_prev.json")):   # 사용량 연결 해제 (상태줄 복원)
+        subprocess.run([sys.executable, os.path.join(runtime.SRC_APP, "usage_setup.py"), "--remove"])
     autostart.disable()
     shutil.rmtree(runtime.HOME_DIR, ignore_errors=True)
     print("PixelPet: 펫 종료, 시작프로그램 해제, 실행 파일 삭제 완료. / Stopped, removed autostart and runtime files.")

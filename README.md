@@ -22,6 +22,7 @@ Claude Code와 Codex의 작업이 끝나면 화면 구석의 **90년대 픽셀 �
 - ❗ **입력이 필요할 때도 알림**: 권한 승인, 선택지 질문, Codex 승인 요청
 - 🧩 **Claude → Codex 서브 알림**: Claude가 실행한 Codex 작업이 카드 아래 서브 항목으로 붙어요
 - ↗️ **클릭하면 해당 세션으로 이동**: 카드를 클릭하면 그 Claude Code가 열린 터미널 창이나 탭이 앞으로 와요
+- 📊 **사용량 탭**: Claude·Codex 요금제의 5시간/주간 한도를 몇 % 썼는지, 언제 초기화되는지 보여줘요
 - 🎵 칩튠 효과음, 알림 ON/OFF, 모두 정리, 축소/확대, 윈도우 시작 시 자동 실행
 
 <p align="center"><img src="docs/images/states.png" alt="펫 상태 표" width="560"></p>
@@ -50,6 +51,21 @@ Codex 알림을 받으려면 Claude Code에서 한 번 실행하세요:
 그다음 터미널에서 `codex`를 한 번 열고, **훅 검토 화면에서 PixelPet 훅을 승인**하세요.
 Codex는 승인된 훅만 실행해요. 승인하기 전에는 Codex 알림이 오지 않아요.
 
+### 사용량 탭에 Claude 한도 표시하기 (선택)
+
+<p align="center"><img src="docs/images/usage.png" alt="사용량 탭" width="300"></p>
+
+알림함의 `사용량` 버튼을 누르면 한도 사용량이 보여요. **Codex는 따로 설정할 필요가 없어요.** Codex가 로컬에 남기는 기록을 읽어요.
+Claude는 Claude Code에서 한 번 실행하세요:
+
+```
+/pixelpet:usage
+```
+
+Claude Code가 상태줄(status line)에 넘겨주는 한도 정보를 받아 오도록 연결해요. 쓰던 상태줄이 있으면 그대로 보여요.
+Claude가 한 번 답하면 숫자가 나타나요. 한도 정보는 **Pro/Max 구독**에서만 나와요. API 키로 로그인했다면 표시되지 않아요.
+되돌리려면 `/pixelpet:usage --remove`를 실행하세요.
+
 ## 사용법
 
 | 동작 | 결과 |
@@ -62,6 +78,7 @@ Codex는 승인된 훅만 실행해요. 승인하기 전에는 Codex 알림이 �
 | `펼치기 ▼` / `접기 ▲` | 5개 넘는 알림을 스크롤로 보기 |
 | `_` 버튼 / 제목 표시줄 더블클릭 | 알림함 축소 ↔ 확대 |
 | `모두 정리` | 진행 중이 아닌 알림 전부 정리 |
+| `사용량` | 알림 목록 ↔ Claude·Codex 한도 사용량 전환 |
 
 ### 알림 종류
 
@@ -80,12 +97,13 @@ Codex는 승인된 훅만 실행해요. 승인하기 전에는 Codex 알림이 �
 /plugin uninstall pixelpet@pixelpet-hyunskki
 ```
 
-`cleanup`은 펫을 끄고, Codex 훅과 시작프로그램 등록을 해제하고, `%LOCALAPPDATA%\PixelPet`을 삭제해요.
+`cleanup`은 펫을 끄고, Codex 훅과 시작프로그램 등록을 해제하고, 상태줄을 원래대로 되돌린 뒤 `%LOCALAPPDATA%\PixelPet`을 삭제해요.
 
 ## 문제 해결
 
 - **펫이 안 보여요**: 터미널에서 `python --version`이 되는지 확인하세요. 그다음 Claude Code를 다시 시작하세요.
 - **Codex 알림이 안 와요**: `/pixelpet:codex`를 실행한 뒤 `codex`에서 훅을 승인했는지 확인하세요.
+- **Claude 사용량이 안 나와요**: `/pixelpet:usage`를 실행한 뒤 Claude에게 메시지를 한 번 보내세요. Pro/Max 구독만 한도 정보가 있어요.
 - **카드를 클릭해도 이동하지 않아요**: 이동은 Windows Terminal / 콘솔에서 실행 중인 Claude Code 세션만 돼요.
   Codex 단독 세션이나 헤드리스(`claude -p`) 세션은 이동하지 않아요.
 - 로그 파일: `%LOCALAPPDATA%\PixelPet\data\pet.log`
@@ -95,6 +113,8 @@ Codex는 승인된 훅만 실행해요. 승인하기 전에는 Codex 알림이 �
 - Claude Code 훅(`SessionStart`, `UserPromptSubmit`, `Stop`, `Notification`, `PreToolUse:AskUserQuestion`)과
   Codex 훅(`UserPromptSubmit`, `Stop`, `PermissionRequest`)이 이벤트를 `127.0.0.1:47321`의 펫 앱으로 보내요.
   네트워크 밖으로는 아무것도 보내지 않아요.
+- 사용량: Claude는 상태줄 입력의 `rate_limits`를 `%LOCALAPPDATA%\PixelPet\data`에 저장해서 읽고,
+  Codex는 `~/.codex/sessions`의 기록을 읽어요. 어느 쪽도 네트워크 요청을 하지 않아요.
 - Claude가 실행한 Codex는 Claude가 넘겨주는 환경변수(`CLAUDE_CODE_SESSION_ID`)로 같은 세션에 묶여요.
 - 실행 파일은 `%LOCALAPPDATA%\PixelPet`에 복사해서 실행해요. 플러그인을 업데이트하면 다음 세션을 시작할 때 자동으로 갱신돼요.
 

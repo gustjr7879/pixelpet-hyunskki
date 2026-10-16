@@ -22,6 +22,7 @@ hands work off to Codex, you get **a single notification once everything — inc
 - ❗ **Input-needed alerts**: permission prompts, multiple-choice questions, Codex approval requests
 - 🧩 **Claude → Codex sub-tasks**: Codex runs started by Claude are attached under that Claude card
 - ↗️ **Click to jump**: clicking a card brings that Claude Code terminal window/tab to the front
+- 📊 **Usage tab**: how much of your Claude and Codex 5-hour / weekly plan limits you've used, and when they reset
 - 🎵 Chiptune sounds, notifications on/off, clear all, collapse/expand, start with Windows
 
 <p align="center"><img src="docs/images/states.png" alt="pet states" width="560"></p>
@@ -51,6 +52,21 @@ Run once in Claude Code:
 Then open `codex` once in a terminal and **approve (trust) the PixelPet hooks** in the hook review screen.
 Codex only runs hooks you have approved. Until then, no Codex notifications arrive.
 
+### Show Claude limits in the usage tab (optional)
+
+<p align="center"><img src="docs/images/usage.png" alt="usage tab" width="300"></p>
+
+Press `사용량` (Usage) in the panel to see your plan limits. **Codex needs no setup**: PixelPet reads the logs Codex keeps on your machine.
+For Claude, run this once in Claude Code:
+
+```
+/pixelpet:usage
+```
+
+This connects PixelPet to the limit info Claude Code passes to its status line. If you already have a status line, it keeps showing.
+The numbers appear after Claude replies once. Only **Pro/Max subscriptions** report plan limits, so API-key logins show nothing.
+To undo it, run `/pixelpet:usage --remove`.
+
 ## Usage
 
 | Action | Result |
@@ -63,6 +79,7 @@ Codex only runs hooks you have approved. Until then, no Codex notifications arri
 | `펼치기 ▼` / `접기 ▲` | Expand to scroll through more than 5 cards / collapse |
 | `_` button / double-click title bar | Collapse ↔ expand the panel |
 | `모두 정리` (clear all) | Clear every card that isn't in progress |
+| `사용량` (usage) | Switch between the card list and Claude/Codex plan usage |
 
 ### Card types
 
@@ -81,12 +98,13 @@ Codex only runs hooks you have approved. Until then, no Codex notifications arri
 /plugin uninstall pixelpet@pixelpet-hyunskki
 ```
 
-`cleanup` stops the pet, removes the Codex hooks and the startup entry, and deletes `%LOCALAPPDATA%\PixelPet`.
+`cleanup` stops the pet, removes the Codex hooks and the startup entry, restores your original status line, and deletes `%LOCALAPPDATA%\PixelPet`.
 
 ## Troubleshooting
 
 - **No pet appears**: make sure `python --version` works in a terminal, then restart Claude Code.
 - **No Codex notifications**: run `/pixelpet:codex` and approve the hooks inside `codex`.
+- **No Claude usage shown**: run `/pixelpet:usage`, then send Claude a message. Only Pro/Max plans report limits.
 - **Clicking a card doesn't jump**: jumping works for Claude Code sessions running in Windows Terminal or a console.
   Standalone Codex sessions and headless (`claude -p`) sessions can't be jumped to.
 - Log file: `%LOCALAPPDATA%\PixelPet\data\pet.log`
@@ -96,6 +114,8 @@ Codex only runs hooks you have approved. Until then, no Codex notifications arri
 - Claude Code hooks (`SessionStart`, `UserPromptSubmit`, `Stop`, `Notification`, `PreToolUse:AskUserQuestion`)
   and Codex hooks (`UserPromptSubmit`, `Stop`, `PermissionRequest`) send events to the pet app on `127.0.0.1:47321`.
   Nothing leaves your machine.
+- Usage: for Claude, the status line's `rate_limits` are saved to `%LOCALAPPDATA%\PixelPet\data` and read from there.
+  For Codex, PixelPet reads the logs in `~/.codex/sessions`. Neither makes a network request.
 - A Codex run started by Claude is linked to its Claude session through the inherited `CLAUDE_CODE_SESSION_ID` environment variable.
 - The app runs from a copy in `%LOCALAPPDATA%\PixelPet`, refreshed automatically at the next session start after a plugin update.
 
