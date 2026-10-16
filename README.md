@@ -25,7 +25,7 @@ Claude Code와 Codex의 작업이 끝나면 화면 구석의 **90년대 픽셀 �
 - 📊 **사용량 탭**: Claude·Codex 요금제의 5시간/주간 한도를 몇 % 썼는지, 언제 초기화되는지 보여줘요
 - 🎵 칩튠 효과음, 알림 ON/OFF, 모두 정리, 축소/확대, 윈도우 시작 시 자동 실행
 
-<p align="center"><img src="docs/images/states.png" alt="펫 상태 표" width="560"></p>
+<p align="center"><img src="docs/images/states.png" alt="펫 상태 표" width="640"></p>
 
 ## 설치
 

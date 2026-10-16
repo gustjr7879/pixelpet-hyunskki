@@ -25,7 +25,7 @@ hands work off to Codex, you get **a single notification once everything — inc
 - 📊 **Usage tab**: how much of your Claude and Codex 5-hour / weekly plan limits you've used, and when they reset
 - 🎵 Chiptune sounds, notifications on/off, clear all, collapse/expand, start with Windows
 
-<p align="center"><img src="docs/images/states.png" alt="pet states" width="560"></p>
+<p align="center"><img src="docs/images/states.png" alt="pet states" width="640"></p>
 
 ## Install
 
