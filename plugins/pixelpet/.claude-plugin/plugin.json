@@ -1,0 +1,10 @@
+{
+  "name": "pixelpet",
+  "version": "0.1.0",
+  "description": "90s pixel desktop pet that notifies you when Claude Code / Codex finish (Windows).",
+  "author": {
+    "name": "hyunskki"
+  },
+  "license": "MIT",
+  "keywords": ["notification", "desktop-pet", "pixel-art", "codex", "windows"]
+}
