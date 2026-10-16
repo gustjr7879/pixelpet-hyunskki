@@ -634,10 +634,19 @@ class App:
                     relief="raised", padx=4 * F, pady=F, highlightthickness=0, takefocus=0)
         self.btn_onoff = tk.Button(bar, command=self.toggle_enabled, **tbtn)
         self.btn_onoff.pack(side="left")
-        tk.Button(bar, text="모두 정리", command=self.clear_all, **tbtn).pack(side="left", padx=(3 * F, 0))
-        self.btn_usage = tk.Button(bar, text="사용량", command=self.toggle_usage, **tbtn)
-        self.btn_usage.pack(side="left", padx=3 * F)
+        tk.Button(bar, text="모두 정리", command=self.clear_all, **tbtn).pack(side="left", padx=3 * F)
         self.btn_expand = tk.Button(bar, command=self.toggle_expand, **tbtn)
+
+        # 탭 (Win95 탭 컨트롤 느낌: 선택된 탭이 더 크고 밝게)
+        strip = tk.Frame(self.content, bg=FACE)
+        strip.pack(fill="x", padx=3 * F)
+        self.tabs = {}
+        for view, text in (("alerts", "알림"), ("usage", "사용량")):
+            t = tk.Label(strip, text=text, font=self.f_small, bg=FACE, fg=INK, bd=2 * F, relief="raised",
+                         padx=6 * F, cursor="hand2")
+            t.pack(side="left", anchor="s")
+            t.bind("<Button-1>", lambda e, v=view: self.set_view(v))
+            self.tabs[view] = t
 
         well = tk.Frame(self.content, bg=FACE, bd=2 * F, relief="sunken")
         well.pack(fill="both", expand=True, padx=3 * F)
@@ -794,8 +803,11 @@ class App:
         n_unread = sum(1 for s in self.sessions.values() if s.unread)
         self.status.configure(text=f" 작업중 {n_work} · 완료 {n_done} · 새 알림 {n_unread}")
         in_usage = self.view == "usage"
-        self.btn_usage.configure(relief="sunken" if in_usage else "raised",
-                                 bg="#d4d0c8" if in_usage else FACE)
+        for view, t in self.tabs.items():
+            on = view == self.view
+            label = ("알림" + (f" ({n_unread})" if n_unread else "")) if view == "alerts" else "사용량"
+            t.configure(text=label, font=self.f_bold if on else self.f_small,
+                        bg=FACE if on else "#b4b0a8", pady=2 * self.F if on else 0)
         if not self.panel_visible or self.settings.get("collapsed"):
             if self.panel_visible:
                 self.place_panel()
@@ -899,8 +911,12 @@ class App:
                      anchor="e").pack(fill="x", padx=6 * F)
 
     def toggle_usage(self):
-        self.view = "alerts" if self.view == "usage" else "usage"
-        self.render()
+        self.set_view("alerts" if self.view == "usage" else "usage")
+
+    def set_view(self, view):
+        if self.view != view:
+            self.view = view
+            self.render()
 
     def place_panel(self):
         self._place_now()

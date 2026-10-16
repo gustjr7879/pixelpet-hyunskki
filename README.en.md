@@ -56,7 +56,7 @@ Codex only runs hooks you have approved. Until then, no Codex notifications arri
 
 <p align="center"><img src="docs/images/usage.png" alt="usage tab" width="300"></p>
 
-Press `사용량` (Usage) in the panel to see your plan limits. **Codex needs no setup**: PixelPet reads the logs Codex keeps on your machine.
+Open the `사용량` (Usage) tab in the panel to see your plan limits. **Codex needs no setup**: PixelPet reads the logs Codex keeps on your machine.
 For Claude, run this once in Claude Code:
 
 ```
@@ -79,7 +79,7 @@ To undo it, run `/pixelpet:usage --remove`.
 | `펼치기 ▼` / `접기 ▲` | Expand to scroll through more than 5 cards / collapse |
 | `_` button / double-click title bar | Collapse ↔ expand the panel |
 | `모두 정리` (clear all) | Clear every card that isn't in progress |
-| `사용량` (usage) | Switch between the card list and Claude/Codex plan usage |
+| `알림` / `사용량` tabs (alerts / usage) | Switch between the card list and Claude/Codex plan usage |
 
 ### Card types
 

@@ -5,13 +5,13 @@
   },
   "metadata": {
     "description": "A 90s pixel desktop pet that tells you when Claude Code / Codex finish their work (Windows).",
-    "version": "0.2.0"
+    "version": "0.2.1"
   },
   "plugins": [
     {
       "name": "pixelpet",
       "description": "90s pixel desktop pet notifier for Claude Code & Codex (Windows).",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "author": {
         "name": "hyunskki"
       },
