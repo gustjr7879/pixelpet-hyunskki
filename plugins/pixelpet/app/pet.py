@@ -1001,7 +1001,8 @@ class App:
         s.unread = False
         if s.pid:
             self.refresh_info(s)
-        if s.hwnd and winfocus.focus(s.hwnd, s.raw_title or s.title):
+        if s.hwnd and winfocus.focus(s.hwnd, s.raw_title or s.title,
+                                     pid=s.pid if s.agent == "claude" else None):
             self.render()
             return
         self.toggle_detail(key)
