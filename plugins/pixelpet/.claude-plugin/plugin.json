@@ -1,6 +1,6 @@
 {
   "name": "pixelpet",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "description": "90s pixel desktop pet that notifies you when Claude Code / Codex finish (Windows).",
   "author": {
     "name": "hyunskki"

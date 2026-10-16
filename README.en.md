@@ -15,7 +15,7 @@ hands work off to Codex, you get **a single notification once everything — inc
 
 ## Features
 
-- 🐱 **5 pixel pets**: cat · dog · chick · ghost · slime (right-click → 펫 고르기 / choose pet)
+- 🐱 **11 pixel pets**: cat · dog · chick · ghost · slime + WIBEE FRIENDS (Wibee · Dalbo · Bombom · Dugi · Cu · Puding) (right-click → 펫 고르기 / choose pet)
 - 💻 **Working indicator**: a little laptop appears and the pet types away. The logo and speech bubble show who is working
   (Claude = orange `✳`, Codex = green `>_`, Claude waiting for Codex = hourglass)
 - 🔔 **Per-session cards**: each card shows the session name (conversation topic). Up to 5 are visible; expand to scroll through all of them

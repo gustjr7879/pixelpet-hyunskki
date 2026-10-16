@@ -110,6 +110,13 @@ SKINS = {
         "extra": [(9, 6, "O"), (10, 7, "O"), (10, 8, "O")],
         "eye_x": 4, "eye_rows": (9, 10, 11),
     },
+    # ── 위비프렌즈 (draft) ──
+    "wibee": {'name': '위비', 'colors': {'K': '#3f8fd0', 'W': '#66c0ef', 'S': '#4aa8de', 'P': '#ff9ab0', 'O': '#ffd600', 'A': '#3f8fd0', 'G': '#d4ebf8', 'L': '#ffcc00', 'D': '#111111', 'H': '#ffffff'}, 'full': ['...AA......AA...', '...AA......AA...', '.....A....A.....', '.....KKKKKK.....', '....KWWWWWWK....', '.GGKWWWWWWWWKGG.', 'GGGKWWWWWWWWKGGG', 'GGGKWWWWWWWWKGGG', '.GGKWWWDDWWWKGG.', '...KWWWDDWWWK...', '..KOOOOOOOOOOK..', '..KWWWWWWWWWWK..', '..KOOOOOOOOOOK..', '...KWWWWWWWWK...', '....KKKKKKKK....', '.....LL..LL.....'], 'eye_x': 5, 'eye_rows': (6, 7), 'eye_w': 1, 'eye_hl': False, 'extra': []},
+    "dalbo": {'name': '달보', 'colors': {'K': '#a8641c', 'W': '#ffd800', 'S': '#f0c400', 'P': '#ff9ab0', 'O': '#b06a1e', 'A': '#a8641c', 'G': '#faf3cc', 'L': '#a8641c', 'D': '#111111', 'H': '#ffffff'}, 'full': ['...AA......AA...', '...AA......AA...', '.....A....A.....', '.....KKKKKK.....', '....KWWWWWWK....', '.GGKWKKWWKKWKGG.', 'GGGKWWWWWWWWKGGG', 'GGGKWWWWWWWWKGGG', '.GGKWWKDDKWWKGG.', '...KWWWKKWWWK...', '..KOOOOOOOOOOK..', '..KWWWWWWWWWWK..', '..KOOOOOOOOOOK..', '...KWWWWWWWWK...', '....KKKKKKKK....', '.....LL..LL.....'], 'eye_x': 5, 'eye_rows': (6, 7), 'eye_w': 1, 'eye_hl': False, 'extra': []},
+    "bombom": {'name': '봄봄', 'colors': {'K': '#ec5f97', 'W': '#ffa8cb', 'S': '#ff94bd', 'P': '#ff7aa8', 'O': '#ffffff', 'A': '#f0508a', 'G': '#fbe6ee', 'L': '#f0508a', 'D': '#111111', 'H': '#ffffff'}, 'full': ['...AA......AA...', '...AA......AA...', '.....A....A.....', '.....KKKKKK.....', '....KWWWWWWK....', '.GGKWWWWWWWWKGG.', 'GGGKWWWWWWWWKGGG', 'GGGKWWWWWWWWKGGG', '.GGKWWDWWDWWKGG.', '...KWWWDDWWWK...', '..KOOOOOOOOOOK..', '..KWWWWWWWWWWK..', '..KOOOOOOOOOOK..', '...KWWWWWWWWK...', '....KKKKKKKK....', '.....LL..LL.....'], 'eye_x': 5, 'eye_rows': (6, 7), 'eye_w': 1, 'eye_hl': False, 'extra': []},
+    "dugi": {'name': '두기', 'colors': {'K': '#7a5a44', 'W': '#ab866b', 'S': '#987459', 'P': '#ff9ab0', 'M': '#f0c9a8', 'N': '#3a2418', 'R': '#e2572a', 'D': '#111111', 'H': '#ffffff'}, 'full': ['................', '.....KKKKKK.....', '....KWWWWWWK....', '...KWDDWWDDWK...', '...KWWWWWWWWK...', '...KWWWWWWWWK...', '...KWWWWWWWWK...', '...KWWMNNMWWK...', '...KWWMMMMWWK...', '...KWWWWWWWWK...', '..KRRRRRRRRRRK..', '..KWWWRRRRWWWK..', '..KWWWWWWWWWWK..', '..KWWWWWWWWWWK..', '...KKKKKKKKKK...', '....RR....RR....'], 'eye_x': 5, 'eye_rows': (5, 6), 'eye_w': 1, 'eye_hl': False, 'extra': []},
+    "cu": {'name': '큐', 'colors': {'K': '#e8c8d6', 'W': '#fdf4f7', 'S': '#f5e3ea', 'P': '#ffb0c8', 'T': '#f0508a', 'D': '#111111', 'H': '#ffffff'}, 'full': ['................', '................', '......T.TT......', '......TTTT......', '.....KKKKKK.....', '....KWWWWWWK....', '....KWWWWWWK....', '...KWWWWWWWWK...', '...KWWWWWWWWK...', '...KWWWTTWWWK...', '..KWWWWWWWWWWK..', '..KSWWWWWWWWSK..', '...KSWWWWWWSK...', '....KSSSSSSK....', '.....KKKKKK.....', '......T..T......'], 'eye_x': 5, 'eye_rows': (7, 8), 'eye_w': 1, 'eye_hl': False, 'extra': []},
+    "puding": {'name': '푸딩', 'colors': {'K': '#6a78b0', 'W': '#8598cc', 'S': '#7787c0', 'P': '#ff9ab0', 'M': '#f4f4f8', 'N': '#111111', 'T': '#bfe0f7', 'L': '#6a78b0', 'D': '#111111', 'H': '#ffffff'}, 'full': ['....KK....KK....', '...KWWKKKKWWK...', '...KWWWWWWWWK...', '..KWWWWWWWWWWK..', '..KWWWWWWWWWWK..', '..KWWWWWWWWWWK..', '..KWWWMNNMWWWK..', '..KWWWMMMMWWWK..', '..KWWWWWWWWWWK..', '..KWWWWWWWWWWK..', '..KWWTWWWWTWWK..', '..KWWWTTTTWWWK..', '..KWWWWWWWWWWK..', '..KWWWWWWWWWWK..', '...KKKKKKKKKK...', '....LL....LL....'], 'eye_x': 5, 'eye_rows': (4, 5), 'eye_w': 1, 'eye_hl': False, 'extra': []},
 }
 PET_COLORS = SKINS["cat"]["colors"]  # 알림함 타이틀 아이콘용
 
@@ -118,6 +125,8 @@ AGENT_DIM = {"claude": "#a8502e", "codex": "#0f7a56"}
 
 
 def build_skin(skin):
+    if "full" in skin:  # 좌우 비대칭 캐릭터는 16칸 전체를 그대로
+        return [list(r) for r in skin["full"]]
     rows = [list(h + h[::-1]) for h in skin["half"]]
     for x, y, c in skin["extra"]:
         rows[y][x] = c
@@ -137,23 +146,29 @@ def pet_frame(skin_id, eyes="open"):
         g[y][x] = c
         g[y][15 - x] = c
 
-    for c in (lx, lx + 1):
+    ew = skin.get("eye_w", 2)  # 1 이면 콕 찍은 점눈
+    for c in range(lx, lx + ew):
         for r in rows:
             put(c, r, "W")
     if eyes == "closed":
-        for c in (lx, lx + 1):
+        for c in ((lx, lx + 1) if ew == 2 else (lx - 1, lx)):
             put(c, bottom, "D")
+    elif eyes == "happy" and len(rows) == 2:  # 작은 점눈용 ^ ^
+        put(lx - 1, bottom, "D")
+        put(lx, top, "D")
+        put(lx + 1, bottom, "D")
     elif eyes == "happy":  # ^ ^
         put(lx, bottom, "D")
         put(lx + 1, rows[1], "D")
         put(lx + 2, bottom, "D")
     else:  # 반짝이는 큰 눈 (오른쪽 위 하이라이트), 좌/우 보기
         d = {"left": -1, "right": 1}.get(eyes, 0)
-        for left in (lx, 14 - lx):
-            for c in (left + d, left + 1 + d):
+        for left in (lx, 16 - ew - lx):
+            for c in range(left + d, left + ew + d):
                 for r in rows:
                     g[r][c] = "D"
-            g[top][left + 1 + d] = "H"
+            if ew == 2 and skin.get("eye_hl", True):
+                g[top][left + 1 + d] = "H"
     return g
 
 
@@ -1044,6 +1059,8 @@ class App:
         self.v_skin = tk.StringVar(value=self.skin_id())
         skins = tk.Menu(self.menu, tearoff=0, font=self.f_body)
         for sid, sk in SKINS.items():
+            if sid == "wibee":  # 위비프렌즈는 구분선 아래에 따로
+                skins.add_separator()
             skins.add_radiobutton(label=sk["name"], value=sid, variable=self.v_skin, command=self.set_skin)
         self.menu.add_cascade(label="펫 고르기", menu=skins)
         self.menu.add_separator()
