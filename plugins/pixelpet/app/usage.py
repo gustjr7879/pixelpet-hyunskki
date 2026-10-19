@@ -101,17 +101,19 @@ def _recent_rollouts(max_days=4, max_files=8):
 
 
 def _codex_from_file(path, mtime):
-    hit = _codex_cache.get(path)
-    if hit and hit[0] == mtime:
-        return hit[1]
-    result = None
+    # Codex 가 파일을 연 채로 쓰는 동안 Windows 는 수정 시각을 늦게 갱신한다
+    # → 직접 열어서 잰 실제 크기로 바뀌었는지 판단
     try:
         with open(path, "rb") as f:
-            f.seek(0, 2)
-            f.seek(max(0, f.tell() - 300_000))
+            size = f.seek(0, 2)
+            hit = _codex_cache.get(path)
+            if hit and hit[0] == size:
+                return hit[1]
+            f.seek(max(0, size - 300_000))
             lines = f.read().decode("utf-8", "replace").splitlines()
     except OSError:
-        lines = []
+        return None
+    result = None
     for line in reversed(lines):
         if '"rate_limits"' not in line:
             continue
@@ -136,16 +138,18 @@ def _codex_from_file(path, mtime):
             pass
         result = {"ts": ts, "limits": limits, "plan": rl.get("plan_type") or ""}
         break
-    _codex_cache[path] = (mtime, result)
+    _codex_cache[path] = (size, result)
     return result
 
 
 def read_codex():
+    """최근 파일들 중 기록 시각이 가장 늦은 것 (수정 시각 순서는 믿을 수 없어서 전부 비교)."""
+    best = None
     for mtime, path in _recent_rollouts():
         r = _codex_from_file(path, mtime)
-        if r:
-            return r
-    return None
+        if r and (best is None or r["ts"] > best["ts"]):
+            best = r
+    return best
 
 
 def fmt_reset(ts):
