@@ -17,8 +17,9 @@ hands work off to Codex, you get **a single notification once everything — inc
 
 - 🐱 **11 pixel pets**: cat · dog · chick · ghost · slime + WIBEE FRIENDS (Wibee · Dalbo · Bombom · Dugi · Cu · Puding) (right-click → 펫 고르기 / choose pet)
 - 💻 **Working indicator**: a little laptop appears and the pet types away. The logo and speech bubble show who is working
-  (Claude = orange `✳`, Codex = green `>_`, Claude waiting for Codex = hourglass)
+  (Claude = orange `✳`, Codex = green `>_`, plain commands = blue `$_`, Claude waiting for Codex = hourglass)
 - 🔔 **Per-session cards**: each card shows the session name (conversation topic). Up to 5 are visible; expand to scroll through all of them
+- ⌨️ **Plain commands too (optional)**: scripts and builds in PowerShell that run 10s+ show up as cards and notify when they finish or fail
 - ❗ **Input-needed alerts**: permission prompts, multiple-choice questions, Codex approval requests
 - 🧩 **Claude → Codex sub-tasks**: Codex runs started by Claude are attached under that Claude card
 - ↗️ **Click to jump**: clicking a card brings that Claude Code terminal window/tab to the front
@@ -51,6 +52,19 @@ Run once in Claude Code:
 
 Then open `codex` once in a terminal and **approve (trust) the PixelPet hooks** in the hook review screen.
 Codex only runs hooks you have approved. Until then, no Codex notifications arrive.
+
+### Show PowerShell commands too (optional)
+
+To also track ordinary scripts and builds (`python train.py`, `npm run build`, ...), run once:
+
+```
+/pixelpet:shell
+```
+
+This adds a line to your PowerShell profile (`$PROFILE`). It applies to **newly opened PowerShell windows**.
+Only commands that run longer than 10 seconds get a `SHELL` card, and you're notified when they finish or fail (with the exit code).
+Interactive programs such as `claude`, `codex`, `ssh`, `vim`, and commands you stop with Ctrl+C are not reported.
+To undo it, run `/pixelpet:shell --remove`.
 
 ### Show Claude limits in the usage tab (optional)
 
@@ -90,6 +104,7 @@ To undo it, run `/pixelpet:usage --remove`.
 | ! 확인이 필요해요! | Claude is waiting for a permission approval |
 | ! 선택이 필요해요! | Claude is asking a multiple-choice question |
 | ! 승인이 필요해요! | Codex approval request |
+| ✔ 명령 완료! / ! 명령 실패 | A PowerShell command that ran 10s+ finished (with `/pixelpet:shell`) |
 
 ## Uninstall
 
@@ -98,7 +113,7 @@ To undo it, run `/pixelpet:usage --remove`.
 /plugin uninstall pixelpet@pixelpet-hyunskki
 ```
 
-`cleanup` stops the pet, removes the Codex hooks and the startup entry, restores your original status line, and deletes `%LOCALAPPDATA%\PixelPet`.
+`cleanup` stops the pet, removes the Codex hooks, the PowerShell hook and the startup entry, restores your original status line, and deletes `%LOCALAPPDATA%\PixelPet`.
 
 ## Troubleshooting
 
@@ -107,6 +122,8 @@ To undo it, run `/pixelpet:usage --remove`.
 - **No Claude usage shown**: run `/pixelpet:usage`, then send Claude a message. Only Pro/Max plans report limits.
 - **Clicking a card doesn't jump**: jumping works for Claude Code sessions running in Windows Terminal or a console.
   Standalone Codex sessions and headless (`claude -p`) sessions can't be jumped to.
+- **PowerShell commands don't show**: after `/pixelpet:shell`, use a **new** PowerShell window and a command that runs 10s+.
+  With execution policy `Restricted` the profile is not loaded (`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`).
 - Log file: `%LOCALAPPDATA%\PixelPet\data\pet.log`
 
 ## How it works
@@ -116,6 +133,7 @@ To undo it, run `/pixelpet:usage --remove`.
   Nothing leaves your machine.
 - Usage: for Claude, the status line's `rate_limits` are saved to `%LOCALAPPDATA%\PixelPet\data` and read from there.
   For Codex, PixelPet reads the logs in `~/.codex/sessions`. Neither makes a network request.
+- The PowerShell hook sends the command line and exit code to the pet app right before PSReadLine runs a command and when the next prompt appears (local only).
 - A Codex run started by Claude is linked to its Claude session through the inherited `CLAUDE_CODE_SESSION_ID` environment variable.
 - The app runs from a copy in `%LOCALAPPDATA%\PixelPet`, refreshed automatically at the next session start after a plugin update.
 

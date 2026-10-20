@@ -2,6 +2,7 @@
 
 pythonw pet.py 로 실행. 훅(pet_hook.py)이 127.0.0.1:47321 로 이벤트를 보낸다.
 """
+import collections
 import ctypes
 import json
 import os
@@ -46,6 +47,7 @@ CREAM = "#fffbe6"
 INK = "#2a1f33"
 CLAUDE_C = "#d0603a"
 CODEX_C = "#178a68"
+SHELL_C = "#4a5aa8"
 STATUS_STYLE = {
     "working":   ("hourglass", "#2f5fa8", "작업중..."),
     "waiting":   ("hourglass", "#b8860b", "codex 작업 기다리는 중"),
@@ -120,8 +122,19 @@ SKINS = {
 }
 PET_COLORS = SKINS["cat"]["colors"]  # 알림함 타이틀 아이콘용
 
-AGENT_COLOR = {"claude": "#e07a4f", "codex": "#19b37f"}
-AGENT_DIM = {"claude": "#a8502e", "codex": "#0f7a56"}
+AGENT_COLOR = {"claude": "#e07a4f", "codex": "#19b37f", "shell": "#7d8ff0"}
+AGENT_DIM = {"claude": "#a8502e", "codex": "#0f7a56", "shell": "#4a5aa8"}
+CARD_STYLE = {"claude": (CLAUDE_C, " CLAUDE "), "codex": (CODEX_C, " CODEX "), "shell": (SHELL_C, " SHELL ")}
+
+# 일반 셸 명령 (pixelpet_shell.ps1): 이만큼 넘게 걸린 것만 펫에 보이고 알린다
+SHELL_MIN_SEC = 10
+SHELL_PROCS = ("powershell.exe", "pwsh.exe")
+# 대화형/상주 프로그램은 제외 — 항상, 또는 인자 없이 실행했을 때만
+SHELL_SKIP = {"claude", "codex", "ssh", "vim", "vi", "nvim", "nano", "less", "more", "man", "top", "htop", "btop",
+              "enter-pssession", "exit"}
+SHELL_SKIP_BARE = {"python", "python3", "py", "ipython", "node", "pwsh", "powershell", "cmd", "bash", "sh", "zsh",
+                   "wsl", "psql", "mysql", "sqlite3", "irb", "ghci", "lua"}
+CTRL_C_CODES = {-1073741510, 3221225786, 130}   # STATUS_CONTROL_C_EXIT / SIGINT
 
 
 def build_skin(skin):
@@ -183,6 +196,7 @@ GLYPHS = {
     "*": ["10101", "01110", "11111", "01110", "10101"],      # Claude 반짝이
     ">": ["100", "010", "001", "010", "100"], "_": ["000", "000", "000", "000", "111"],  # Codex 프롬프트
     "h": ["111", "101", "010", "101", "111"],                # 모래시계 (codex 기다리는 중)
+    "$": ["011", "110", "010", "011", "110"],                # 셸 명령
 }
 
 ICONS = {
@@ -243,6 +257,15 @@ def make_chip_wav(path, notes, volume=0.16, rate=22050):
         w.writeframes(bytes(frames))
 
 
+def fmt_dur(sec):
+    sec = int(sec)
+    if sec < 60:
+        return f"{sec}초"
+    if sec < 3600:
+        return f"{sec // 60}분 {sec % 60}초"
+    return f"{sec // 3600}시간 {sec % 3600 // 60}분"
+
+
 def snippet(text, n):
     t = re.sub(r"[`*#>_|]+", "", text or "")
     t = re.sub(r"\s+", " ", t).strip()
@@ -279,6 +302,7 @@ class Session:
         self.ready_at = None
         self.attn_label = ""     # '확인이 필요해요!' / '선택이 필요해요!' 등
         self.attn_at = 0.0
+        self.started = time.time()
 
     @property
     def project(self):
@@ -338,6 +362,9 @@ class App:
     def __init__(self, server, q):
         self.server, self.q = server, q
         self.sessions = {}
+        self.shell_runs = {}                          # 셸 pid -> 아직 짧은(카드 전) 명령
+        self.shell_ended = collections.deque(maxlen=64)
+        self.shell_drawn = 0.0
         self.settings = {"enabled": True, "sound": True, "x": None, "y": None, "collapsed": False,
                          "skin": "cat"}
         try:
@@ -505,7 +532,7 @@ class App:
         """지금 일하고 있는 에이전트 집합과 'Claude 가 codex 를 기다리는 중' 여부."""
         agents, waiting = set(), False
         for s in self.sessions.values():
-            if s.status in ("working", "attention"):
+            if s.status == "working" or (s.status == "attention" and s.agent != "shell"):
                 agents.add(s.agent)
             if s.status == "waiting":
                 waiting = True
@@ -605,6 +632,8 @@ class App:
                 self.bubble("*" if f % 4 < 3 else "+", AGENT_COLOR["claude"])
             elif agent == "codex":
                 self.bubble(">_" if f % 4 < 3 else ">", AGENT_COLOR["codex"])
+            elif agent == "shell":
+                self.bubble("$_" if f % 4 < 3 else "$", AGENT_COLOR["shell"])
             else:
                 self.bubble("h", "#c99a12")
         elif mode == "sleep":
@@ -725,13 +754,13 @@ class App:
     def build_card(self, s):
         F = self.F
         wrap = self.panel_width - 40 * F
-        color = CLAUDE_C if s.agent == "claude" else CODEX_C
+        color, tag = CARD_STYLE.get(s.agent, CARD_STYLE["codex"])
         card = tk.Frame(self.inner, bg=FACE, bd=2 * F, relief="raised")
         card.pack(fill="x", padx=2 * F, pady=(2 * F, 0))
 
         head = tk.Frame(card, bg=color)
         head.pack(fill="x")
-        tk.Label(head, text=" CLAUDE " if s.agent == "claude" else " CODEX ", font=self.f_small,
+        tk.Label(head, text=tag, font=self.f_small,
                  bg=INK, fg="#ffffff").pack(side="left", padx=(2 * F, 3 * F), pady=2 * F)
         tk.Label(head, text=snippet(s.title or s.project, 15), font=self.f_bold,
                  bg=color, fg="#ffffff").pack(side="left")
@@ -752,6 +781,9 @@ class App:
             stext = f"codex 작업 기다리는 중 ({len(s.working_subs())})"
         elif s.status == "attention" and s.attn_label:
             stext = s.attn_label
+        elif s.agent == "shell":
+            stext = {"working": f"실행 중... {fmt_dur(time.time() - s.started)}째",
+                     "done": s.attn_label}.get(s.status, stext)
         row = tk.Frame(body, bg=CREAM)
         row.pack(fill="x", padx=4 * F, pady=(3 * F, F))
         self.icon(row, icon_name, scol, CREAM).pack(side="left", padx=(0, 4 * F))
@@ -1017,7 +1049,7 @@ class App:
         if s.pid:
             self.refresh_info(s)
         if s.hwnd and winfocus.focus(s.hwnd, s.raw_title or s.title,
-                                     pid=s.pid if s.agent == "claude" else None):
+                                     pid=s.pid if s.agent in ("claude", "shell") else None):
             self.render()
             return
         self.toggle_detail(key)
@@ -1041,6 +1073,9 @@ class App:
                 if winfocus.clean_title(raw):
                     s.title, s.raw_title = winfocus.clean_title(raw), raw
                 s.hwnd = hwnd or s.hwnd or winfocus.ancestor_window(s.pid)
+            elif s.agent == "shell" and s.pid and not s.hwnd:   # 제목은 그대로 두고 창만
+                _raw, hwnd = winfocus.console_info(s.pid)
+                s.hwnd = hwnd or winfocus.ancestor_window(s.pid)
             elif s.agent == "codex" and not s.title and s.sid:
                 name = winfocus.codex_thread_name(s.sid)
                 s.title = re.sub(r"^Codex Companion Task:\s*", "", name)
@@ -1114,7 +1149,8 @@ class App:
     def debug_state(self):
         out = {"enabled": self.settings["enabled"], "panel": self.panel_visible,
                "panel_geo": self.panel.winfo_geometry(),
-               "panel_req": [self.panel.winfo_reqwidth(), self.panel.winfo_reqheight()], "sessions": []}
+               "panel_req": [self.panel.winfo_reqwidth(), self.panel.winfo_reqheight()], "sessions": [],
+               "shell_runs": {str(k): v for k, v in self.shell_runs.items()}}
         for s in list(self.sessions.values()):
             d = {k: v for k, v in vars(s).items() if k != "subs"}
             d["subs"] = [vars(x) for x in list(s.subs.values())]
@@ -1217,6 +1253,9 @@ class App:
             self.on_card_click(e.get("key", ""))
             return
         src, ev = e.get("source"), e.get("event")
+        if src == "shell":
+            self.handle_shell(e)
+            return
         sid = e.get("session_id") or "unknown"
         msg = e.get("message") or ""
         now = time.time()
@@ -1281,6 +1320,80 @@ class App:
             self.fire(s, kind="attention", label="승인이 필요해요!")
         self.refresh_info(s)
         self.dirty = True
+
+    # ── 일반 셸 명령 ──
+    # 시작 이벤트는 shell_runs 에만 담아 두고, SHELL_MIN_SEC 을 넘기면 poll 이 세션(카드)으로 올린다
+    # → 금방 끝나는 ls, cd 같은 건 화면에 아무것도 안 나타남
+    @staticmethod
+    def shell_skipped(cmd):
+        words = cmd.strip().split()
+        if not words:
+            return True
+        first = os.path.basename(words[0].strip("&'\"")).lower()
+        first = first[:-4] if first.endswith((".exe", ".cmd", ".bat", ".ps1")) else first
+        return first in SHELL_SKIP or (len(words) == 1 and first in SHELL_SKIP_BARE)
+
+    def handle_shell(self, e):
+        try:
+            pid, run = int(e.get("pid")), int(e.get("run"))
+        except (TypeError, ValueError):
+            return
+        if e.get("event") == "start":
+            if (pid, run) in self.shell_ended:          # 끝 이벤트가 먼저 도착한 짧은 명령
+                return
+            self.end_shell_card(pid)                   # 같은 창에서 새 명령 → 이전 것은 정리
+            cmd = str(e.get("cmd") or "")
+            if not self.shell_skipped(cmd):
+                self.shell_runs[pid] = {"run": run, "cmd": cmd[:2000], "cwd": e.get("cwd") or "",
+                                        "t0": time.time()}
+            return
+        self.shell_ended.append((pid, run))
+        info = self.shell_runs.get(pid)
+        if info and info["run"] == run:
+            del self.shell_runs[pid]
+        s = self.sessions.get(f"shell:{pid}:{run}")
+        if not s or s.status != "working":
+            return
+        dur = fmt_dur(time.time() - s.started)
+        code = e.get("code")
+        if e.get("ok") is not False:
+            s.attn_label = f"명령 완료! ({dur})"
+            self.fire(s)
+        elif code in CTRL_C_CODES:                     # 사용자가 직접 멈춤 → 알릴 필요 없음
+            self.sessions.pop(s.key, None)
+            self.dirty = True
+        else:
+            failed = f"명령 실패 (코드 {code})" if code not in (None, 0) else "명령 실패"
+            self.fire(s, kind="attention", label=f"{failed} · {dur}")
+
+    def end_shell_card(self, pid):
+        """끝 이벤트를 못 받은 채 남은 카드 정리 (창을 닫았거나 같은 창에서 새 명령)."""
+        for s in list(self.sessions.values()):
+            if s.agent == "shell" and s.pid == pid and s.status == "working":
+                self.sessions.pop(s.key, None)
+                self.dirty = True
+
+    def poll_shell(self, procs):
+        now = time.time()
+        for pid, info in list(self.shell_runs.items()):
+            if procs.get(pid, (0, ""))[1] not in SHELL_PROCS:
+                del self.shell_runs[pid]               # 창을 닫음
+            elif now - info["t0"] >= SHELL_MIN_SEC:
+                del self.shell_runs[pid]
+                s = Session(f"shell:{pid}:{info['run']}", "shell", str(pid))
+                s.pid, s.cwd, s.message, s.started = pid, info["cwd"], info["cmd"], info["t0"]
+                self.sessions[s.key] = s
+                self.refresh_info(s)
+                self.dirty = True
+        running = False
+        for s in list(self.sessions.values()):
+            if s.agent == "shell" and s.status == "working":
+                running = True
+                if procs.get(s.pid, (0, ""))[1] not in SHELL_PROCS:
+                    self.end_shell_card(s.pid)
+        if running and self.panel_visible and self.view == "alerts" and now - self.shell_drawn > 10:
+            self.shell_drawn = now                     # 실행 시간 표시는 10초마다 갱신
+            self.dirty = True
 
     @staticmethod
     def answered(s):
@@ -1405,6 +1518,7 @@ class App:
                     self.evaluate(s)
                     if s.status != before:
                         self.dirty = True
+            self.poll_shell(procs)
             # 오래된 기록 정리
             if len(self.sessions) > 80:
                 for s in sorted(self.sessions.values(), key=lambda s: s.updated)[: len(self.sessions) - 80]:
