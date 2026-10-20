@@ -81,3 +81,43 @@ def root_codex_under(claude_pid, procs, kids=None):
             continue
         stack.extend(kids.get(p, []))
     return found
+
+
+# ── 명령줄 / 시작 시각 (Claude 가 실행한 명령 표시용) ──
+_ntdll = ctypes.WinDLL("ntdll")
+_k32.OpenProcess.restype = wintypes.HANDLE
+_k32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+_k32.GetProcessTimes.argtypes = [wintypes.HANDLE] + [ctypes.POINTER(wintypes.FILETIME)] * 4
+_QUERY_LIMITED = 0x1000
+
+
+class _UNICODE_STRING(ctypes.Structure):
+    _fields_ = [("Length", wintypes.USHORT), ("MaximumLength", wintypes.USHORT), ("Buffer", ctypes.c_void_p)]
+
+
+def process_info(pid):
+    """(명령줄, 시작 시각 epoch) — 못 읽으면 ("", None)."""
+    h = _k32.OpenProcess(_QUERY_LIMITED, False, pid)
+    if not h:
+        return "", None
+    try:
+        cmd, size = "", 65536
+        for _ in range(2):
+            buf = ctypes.create_string_buffer(size)
+            need = wintypes.ULONG(0)
+            st = _ntdll.NtQueryInformationProcess(h, 60, buf, size, ctypes.byref(need))  # ProcessCommandLineInformation
+            if st == 0:
+                us = _UNICODE_STRING.from_buffer(buf)
+                cmd = ctypes.wstring_at(us.Buffer, us.Length // 2) if us.Buffer else ""
+                break
+            if not need.value or need.value <= size:
+                break
+            size = need.value
+        times = [wintypes.FILETIME() for _ in range(4)]
+        started = None
+        if _k32.GetProcessTimes(h, *[ctypes.byref(t) for t in times]):
+            ft = (times[0].dwHighDateTime << 32) | times[0].dwLowDateTime
+            started = ft / 1e7 - 11644473600
+        return cmd, started
+    finally:
+        _k32.CloseHandle(h)

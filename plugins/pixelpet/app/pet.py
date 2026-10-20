@@ -135,6 +135,26 @@ SHELL_SKIP = {"claude", "codex", "ssh", "vim", "vi", "nvim", "nano", "less", "mo
 SHELL_SKIP_BARE = {"python", "python3", "py", "ipython", "node", "pwsh", "powershell", "cmd", "bash", "sh", "zsh",
                    "wsl", "psql", "mysql", "sqlite3", "irb", "ghci", "lua"}
 CTRL_C_CODES = {-1073741510, 3221225786, 130}   # STATUS_CONTROL_C_EXIT / SIGINT
+SHELL_EXES = {"bash.exe", "sh.exe", "cmd.exe", "powershell.exe", "pwsh.exe", "conhost.exe"}
+BASH_EVAL = re.compile(r"eval '(.*)'\s*(?:<\s*/dev/null)?\s*&&\s*pwd -P", re.S)
+
+
+def tool_command_label(cmd):
+    """Claude Bash 도구 명령줄에서 실제 명령만 (eval '...' 부분)."""
+    m = BASH_EVAL.search(cmd or "")
+    return m.group(1).replace("'\\''", "'").replace('\\"', '"').strip() if m else ""
+
+
+def short_cmdline(cmd):
+    """'"C:\\...\\python.exe" -m x' → 'python -m x'"""
+    cmd = (cmd or "").strip()
+    if cmd.startswith('"'):
+        exe, _, rest = cmd[1:].partition('"')
+    else:
+        exe, _, rest = cmd.partition(" ")
+    exe = os.path.basename(exe)
+    exe = exe[:-4] if exe.lower().endswith(".exe") else exe
+    return (exe + " " + rest.strip()).strip()
 
 
 def build_skin(skin):
@@ -303,6 +323,7 @@ class Session:
         self.attn_label = ""     # '확인이 필요해요!' / '선택이 필요해요!' 등
         self.attn_at = 0.0
         self.started = time.time()
+        self.cmds = {}           # Claude 가 실행해 10초 넘게 도는 명령: pid -> (명령, 시작 시각)
 
     @property
     def project(self):
@@ -365,6 +386,7 @@ class App:
         self.shell_runs = {}                          # 셸 pid -> 아직 짧은(카드 전) 명령
         self.shell_ended = collections.deque(maxlen=64)
         self.shell_drawn = 0.0
+        self.tool_cache = {}                          # Claude 도구 셸 pid -> (명령, 시작 시각)
         self.settings = {"enabled": True, "sound": True, "x": None, "y": None, "collapsed": False,
                          "skin": "cat"}
         try:
@@ -538,6 +560,8 @@ class App:
                 waiting = True
             if any(x.status == "working" for x in s.subs.values()):
                 agents.add("codex")
+            if s.cmds:
+                agents.add("shell")
         return agents, waiting
 
     def pet_mode(self):
@@ -816,6 +840,17 @@ class App:
             if not expanded and len(subs) > 3:
                 tk.Label(sb, text=f"   … 서브 작업 {len(subs) - 3}개 더", font=self.f_small,
                          bg=CREAM, fg="#808080").pack(anchor="w")
+
+        if s.cmds:
+            cb = tk.Frame(body, bg=CREAM)
+            cb.pack(fill="x", padx=6 * F, pady=(0, 3 * F))
+            for label, started in sorted(s.cmds.values(), key=lambda x: x[1]):
+                r = tk.Frame(cb, bg=CREAM)
+                r.pack(fill="x")
+                tk.Label(r, text="└ $", font=self.f_small, bg=CREAM, fg=SHELL_C).pack(side="left")
+                txt = f"실행 중 {fmt_dur(time.time() - started)}째 · " + snippet(label, 300 if expanded else 34)
+                tk.Label(r, text=txt, font=self.f_small, bg=CREAM, fg="#4a4a4a", justify="left",
+                         anchor="w", wraplength=wrap - 30 * F).pack(side="left", fill="x")
 
         foot = tk.Frame(body, bg=CREAM)
         foot.pack(fill="x", padx=4 * F, pady=(0, 2 * F))
@@ -1385,7 +1420,7 @@ class App:
                 self.sessions[s.key] = s
                 self.refresh_info(s)
                 self.dirty = True
-        running = False
+        running = any(s.cmds for s in self.sessions.values())
         for s in list(self.sessions.values()):
             if s.agent == "shell" and s.status == "working":
                 running = True
@@ -1475,6 +1510,9 @@ class App:
         if not s.pid:
             return
         if procs.get(s.pid, (0, ""))[1] != "claude.exe":
+            if s.cmds:
+                s.cmds = {}
+                self.dirty = True
             for sub in s.subs.values():
                 sub.status = "done" if sub.status == "working" else sub.status
             if s.status in ("working", "waiting", "attention"):
@@ -1496,6 +1534,51 @@ class App:
             if sub.pid and sub.status == "working" and sub.pid not in roots:
                 sub.status, sub.updated = "done", now
                 self.dirty = True
+        cmds = self.tool_commands(s.pid, procs, kids)
+        if cmds.keys() != s.cmds.keys():
+            self.dirty = True
+        s.cmds = cmds
+
+    def tool_commands(self, claude_pid, procs, kids):
+        """Claude 의 Bash/PowerShell 도구로 실행돼 SHELL_MIN_SEC 넘게 도는 명령 (백그라운드 포함)."""
+        out, now = {}, time.time()
+        for child in kids.get(claude_pid, []):
+            name = procs.get(child, (0, ""))[1]
+            if name not in ("bash.exe", "cmd.exe"):
+                continue
+            info = self.tool_cache.get(child)
+            if info is None:
+                cmd, started = proctree.process_info(child)
+                label = ""
+                if name == "bash.exe" and "shell-snapshots" in cmd:      # Bash 도구
+                    label = tool_command_label(cmd) or "bash 명령"
+                elif name == "cmd.exe":                                   # PowerShell 도구: cmd → powershell
+                    for g in kids.get(child, []):
+                        if procs.get(g, (0, ""))[1] in ("powershell.exe", "pwsh.exe") and \
+                                "CLAUDE_CODE_SHELL_LAUNCHER" in proctree.process_info(g)[0]:
+                            label = self.first_program(g, procs, kids) or "PowerShell 명령"
+                            break
+                    else:
+                        if kids.get(child):          # 아직 powershell 이 안 떴을 수 있음 → 다음에 다시 확인
+                            continue
+                info = self.tool_cache[child] = (label, started or now)
+            if info[0] and now - info[1] >= SHELL_MIN_SEC:
+                out[child] = info
+        if len(self.tool_cache) > 500:
+            self.tool_cache = {p: v for p, v in self.tool_cache.items() if p in procs}
+        return out
+
+    @staticmethod
+    def first_program(pid, procs, kids):
+        """셸 아래에서 처음 나오는 실제 프로그램의 명령줄."""
+        stack = list(kids.get(pid, []))
+        while stack:
+            p = stack.pop(0)
+            if procs.get(p, (0, ""))[1] in SHELL_EXES:
+                stack.extend(kids.get(p, []))
+                continue
+            return short_cmdline(proctree.process_info(p)[0])
+        return ""
 
     def poll(self):
         try:

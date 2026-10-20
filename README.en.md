@@ -19,7 +19,8 @@ hands work off to Codex, you get **a single notification once everything — inc
 - 💻 **Working indicator**: a little laptop appears and the pet types away. The logo and speech bubble show who is working
   (Claude = orange `✳`, Codex = green `>_`, plain commands = blue `$_`, Claude waiting for Codex = hourglass)
 - 🔔 **Per-session cards**: each card shows the session name (conversation topic). Up to 5 are visible; expand to scroll through all of them
-- ⌨️ **Plain commands too (optional)**: scripts and builds in PowerShell that run 10s+ show up as cards and notify when they finish or fail
+- ⌨️ **Plain commands too**: commands Claude runs with its Bash/PowerShell tools for 10s+ (background servers included) show as a `$` line under that Claude card, no setup needed.
+  Commands in your own PowerShell windows get their own cards (with done/failed alerts) after `/pixelpet:shell`
 - ❗ **Input-needed alerts**: permission prompts, multiple-choice questions, Codex approval requests
 - 🧩 **Claude → Codex sub-tasks**: Codex runs started by Claude are attached under that Claude card
 - ↗️ **Click to jump**: clicking a card brings that Claude Code terminal window/tab to the front
