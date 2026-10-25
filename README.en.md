@@ -138,6 +138,18 @@ To undo it, run `/pixelpet:usage --remove`.
 - A Codex run started by Claude is linked to its Claude session through the inherited `CLAUDE_CODE_SESSION_ID` environment variable.
 - The app runs from a copy in `%LOCALAPPDATA%\PixelPet`, refreshed automatically at the next session start after a plugin update.
 
+## Release notes
+
+### 0.4.2 — memory leak fix
+- **Symptom**: memory kept growing while the pet ran (about 7 GB a day, ~27 GB after four days), which could starve other programs.
+- **Cause**: every 0.16 s the pet deleted and recreated ~170 pixel rectangles. The Tk 9.0.4 canvas bundled with Python 3.15 does not give back
+  part of each deleted item (~80 bytes), so ~13 KB piled up per frame. Plain Tcl without Python leaks the same way.
+- **Fix**: rectangles are created once and reused by changing only their position and color; unused ones are hidden.
+  Only changed cells are updated, so there are fewer Tk calls too.
+- **Verified**: growth over 3,000 frames went from 13.6 KB/frame to 0. Across 400 frames mixing every pet state (idle, working, alert, done, sleep ×
+  working agents) the visible rectangles (position, color, stacking order) are identical to the previous version.
+- Restart a pet that is already running after updating to free the memory it has built up.
+
 ## License
 
 - Code: [MIT](LICENSE)

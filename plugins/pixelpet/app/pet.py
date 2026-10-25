@@ -466,6 +466,7 @@ class App:
         self.pet_w, self.pet_h = w, h
         self.cv = tk.Canvas(r, width=w, height=h, bg=KEY, highlightthickness=0, bd=0, cursor="hand2")
         self.cv.pack()
+        self.pet_items, self.pet_state, self.pet_used = [], [], 0
         x, y = self.settings.get("x"), self.settings.get("y")
         vx0, vy0, vx1, vy1 = virtual_screen()
         if x is None or y is None or not (vx0 <= x <= vx1 - w and vy0 <= y <= vy1 - h):
@@ -505,9 +506,22 @@ class App:
             self.toggle_panel()
 
     # ── 펫 그리기 ──
-    def px(self, x, y, color, w=1, h=1, tag="pet"):
+    # 캔버스 항목을 매 프레임 지우고 새로 만들면 Tk 9.0 이 항목마다 ~80바이트를 돌려주지 않아
+    # (하루 ~7GB) 한 번 만든 사각형을 재사용한다. 그리는 순서대로 쓰므로 겹침 순서도 같다.
+    def px(self, x, y, color, w=1, h=1):
         P = self.P
-        self.cv.create_rectangle(x * P, y * P, (x + w) * P, (y + h) * P, fill=color, outline="", tags=tag)
+        x0, y0, x1, y1 = x * P, y * P, (x + w) * P, (y + h) * P
+        pool, i = self.pet_items, self.pet_used
+        if i < len(pool):
+            item = pool[i]
+            if self.pet_state[i] != (x0, y0, x1, y1, color):
+                self.cv.coords(item, x0, y0, x1, y1)
+                self.cv.itemconfigure(item, fill=color, state="normal")
+                self.pet_state[i] = (x0, y0, x1, y1, color)
+        else:
+            pool.append(self.cv.create_rectangle(x0, y0, x1, y1, fill=color, outline=""))
+            self.pet_state.append((x0, y0, x1, y1, color))
+        self.pet_used = i + 1
 
     def draw_glyphs(self, text, x, y, color):
         for ch in text:
@@ -607,7 +621,14 @@ class App:
         return SKINS[self.skin_id()]
 
     def draw_pet(self):
-        self.cv.delete("pet")
+        self.pet_used = 0
+        self._draw_pet()
+        for i in range(self.pet_used, len(self.pet_items)):   # 이번 프레임에 안 쓴 사각형은 숨김
+            if self.pet_state[i] is not None:
+                self.cv.itemconfigure(self.pet_items[i], state="hidden")
+                self.pet_state[i] = None
+
+    def _draw_pet(self):
         f = self.frame_no
         mode = self.pet_mode()
         skin = self.skin()
