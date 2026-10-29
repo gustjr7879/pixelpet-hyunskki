@@ -7,7 +7,7 @@ import hashlib
 import os
 import shutil
 
-VERSION = "0.4.2"
+VERSION = "0.4.3"
 PORT = int(os.environ.get("PIXELPET_PORT", "47321"))
 DEBUG = os.environ.get("PIXELPET_DEBUG") == "1"
 AUTH_HEADER = "X-PixelPet"   # 브라우저 등 다른 출처의 위조 요청 차단용 (커스텀 헤더는 CORS 사전요청이 필요)

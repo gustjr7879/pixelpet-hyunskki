@@ -70,8 +70,8 @@ PowerShell 프로필(`$PROFILE`)에 연결 줄을 추가해요. **새로 여는 
 
 <p align="center"><img src="docs/images/usage.png" alt="사용량 탭" width="300"></p>
 
-알림함의 `사용량` 탭을 누르면 한도 사용량이 보여요. **Codex는 따로 설정할 필요가 없어요.** Codex가 로컬에 남기는 기록을 읽어요.
-Claude는 Claude Code에서 한 번 실행하세요:
+알림함의 `사용량` 탭을 누르면 한도 사용량이 보여요. 탭이 열려 있으면 1분마다 각 서비스에 직접 물어봐서 **다른 컴퓨터에서 쓴 양도 반영돼요** (이 PC에 로그인된 Claude Code·Codex 계정 사용). **Codex는 따로 설정할 필요가 없어요.**
+서버에 못 물어볼 때를 대비해 Claude는 Claude Code에서 한 번 실행해 두면 좋아요:
 
 ```
 /pixelpet:usage
@@ -130,14 +130,24 @@ Claude가 한 번 답하면 숫자가 나타나요. 한도 정보는 **Pro/Max �
 
 - Claude Code 훅(`SessionStart`, `UserPromptSubmit`, `Stop`, `Notification`, `PreToolUse:AskUserQuestion`)과
   Codex 훅(`UserPromptSubmit`, `Stop`, `PermissionRequest`)이 이벤트를 `127.0.0.1:47321`의 펫 앱으로 보내요.
-  네트워크 밖으로는 아무것도 보내지 않아요.
-- 사용량: Claude는 상태줄 입력의 `rate_limits`를 `%LOCALAPPDATA%\PixelPet\data`에 저장해서 읽고,
-  Codex는 `~/.codex/sessions`의 기록을 읽어요. 어느 쪽도 네트워크 요청을 하지 않아요.
+  훅 이벤트는 네트워크 밖으로 보내지 않아요.
+- 사용량: 사용량 탭이 열려 있을 때만 `~/.claude/.credentials.json`·`~/.codex/auth.json`의 로그인 토큰으로
+  Anthropic(`api.anthropic.com`)·OpenAI(`chatgpt.com`) 사용량 API를 1분마다 물어봐요. 토큰은 그 두 곳 말고는 보내지 않고, 갱신도 하지 않아요.
+  실패하면 로컬 기록(Claude는 상태줄 입력의 `rate_limits`를 `%LOCALAPPDATA%\PixelPet\data`에 저장한 것,
+  Codex는 `~/.codex/sessions`의 기록)을 써요.
 - PowerShell 연결은 PSReadLine이 명령을 실행하기 직전과 다음 프롬프트가 뜰 때 명령 내용·종료 코드를 펫 앱에 보내요 (역시 로컬로만).
 - Claude가 실행한 Codex는 Claude가 넘겨주는 환경변수(`CLAUDE_CODE_SESSION_ID`)로 같은 세션에 묶여요.
 - 실행 파일은 `%LOCALAPPDATA%\PixelPet`에 복사해서 실행해요. 플러그인을 업데이트하면 다음 세션을 시작할 때 자동으로 갱신돼요.
 
 ## 패치 노트
+
+### 0.4.3 — Codex 오래 걸리는 작업, 다른 PC 사용량
+- **Codex 15분 종료 오판 수정**: Claude가 띄운 Codex가 15분 넘게 일하면 '15분 넘게 응답이 없어 종료로 처리'로 바뀌었어요.
+  Windows는 열린 채로 쓰이는 파일의 수정 시각을 늦게 갱신해서, Codex가 기록을 계속 쓰고 있어도 멈춘 것처럼 보였어요.
+  이제 Codex 프로세스가 살아 있으면 끝날 때까지 기다리고, 프로세스를 못 찾았을 땐 기록 파일의 실제 크기 변화로 판단해요
+  (Codex가 어딘가 돌고 있으면 최대 2시간까지 기다려요).
+- **다른 컴퓨터에서 쓴 사용량 반영**: 사용량은 이 PC에 남은 기록만 읽어서, 다른 PC에서 쓴 양이 안 보였어요.
+  이제 사용량 탭이 열려 있으면 Claude·Codex 사용량 API에서 직접 받아와요. 안 되면 예전처럼 로컬 기록을 써요.
 
 ### 0.4.2 — 메모리 누수 수정
 - **증상**: 펫을 며칠 켜 두면 메모리가 계속 늘었어요 (하루 약 7GB, 4일에 약 27GB). 다른 프로그램이 메모리 부족으로 멈출 수 있었어요.

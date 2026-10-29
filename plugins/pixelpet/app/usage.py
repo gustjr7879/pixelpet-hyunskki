@@ -1,13 +1,19 @@
-"""사용량(요금제 한도) 읽기 — 네트워크 없이 로컬 파일만 본다.
+"""사용량(요금제 한도) 읽기.
 
+한도는 계정 단위라 다른 PC 에서 쓴 양도 반영되도록, 사용량 탭이 열려 있으면
+각 서비스의 사용량 API 를 직접 물어본다 (이 PC 에 로그인된 토큰 사용, 토큰 갱신은 하지 않음).
+실패하면 로컬 기록 중 더 최근 것을 쓴다:
 - Claude: Claude Code 가 상태줄(statusLine) 명령에 넘겨주는 rate_limits 를
           statusline.py 가 data/claude_usage.json 에 저장해 둔 것 (Pro/Max 구독에서만 값이 있음)
 - Codex : ~/.codex/sessions/**/rollout-*.jsonl 의 마지막 token_count 이벤트에 있는 rate_limits
 """
 import calendar
+import datetime
 import json
 import os
+import threading
 import time
+import urllib.request
 
 import runtime
 
@@ -15,8 +21,18 @@ CLAUDE_FILE = os.path.join(runtime.DATA_DIR, "claude_usage.json")
 CLAUDE_SETTINGS = os.path.join(os.path.expanduser("~"), ".claude", "settings.json")
 CODEX_SESSIONS = os.path.join(os.path.expanduser("~"), ".codex", "sessions")
 RELAY_MARK = "statusline.py"
+CLAUDE_CRED = os.path.join(os.path.expanduser("~"), ".claude", ".credentials.json")
+CODEX_AUTH = os.path.join(os.path.expanduser("~"), ".codex", "auth.json")
+CLAUDE_URL = "https://api.anthropic.com/api/oauth/usage"
+CODEX_URL = "https://chatgpt.com/backend-api/wham/usage"
+ONLINE_EVERY, ONLINE_BACKOFF = 60, 300   # 성공 시 1분, 실패 시 5분 뒤에 다시
 
 _codex_cache = {}  # path -> (mtime, result)
+_online = {}       # agent -> 서버에서 받은 결과
+_next_try = {}     # agent -> 다음에 물어볼 시각
+_busy = set()
+_updated = threading.Event()
+_lock = threading.Lock()
 
 
 def window_label(minutes):
@@ -54,7 +70,11 @@ def claude_relay_installed():
 
 
 def read_claude():
-    """{'ts', 'limits': [...]} 또는 None."""
+    """{'ts', 'limits': [...]} 또는 None — 서버 값과 로컬 기록 중 최신."""
+    return _newer(_online.get("claude"), _read_claude_local())
+
+
+def _read_claude_local():
     try:
         with open(CLAUDE_FILE, encoding="utf-8") as f:
             d = json.load(f)
@@ -143,6 +163,11 @@ def _codex_from_file(path, mtime):
 
 
 def read_codex():
+    """서버 값과 로컬 기록 중 최신."""
+    return _newer(_online.get("codex"), _read_codex_local())
+
+
+def _read_codex_local():
     """최근 파일들 중 기록 시각이 가장 늦은 것 (수정 시각 순서는 믿을 수 없어서 전부 비교)."""
     best = None
     for mtime, path in _recent_rollouts():
@@ -150,6 +175,120 @@ def read_codex():
         if r and (best is None or r["ts"] > best["ts"]):
             best = r
     return best
+
+
+def _newer(a, b):
+    cands = [x for x in (a, b) if x and x.get("limits")]
+    return max(cands, key=lambda x: x["ts"]) if cands else (a or b)
+
+
+# ── 서버에서 직접 읽기 (다른 PC 에서 쓴 사용량까지 반영) ──
+def _load_json(path):
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def _claude_token():
+    c = (_load_json(CLAUDE_CRED) or {}).get("claudeAiOauth") or {}
+    tok, exp = c.get("accessToken"), c.get("expiresAt") or 0
+    if not tok or (exp and exp / 1000 < time.time()):   # 만료된 토큰은 Claude Code 가 갱신할 때까지 기다린다
+        return None, ""
+    return tok, c.get("subscriptionType") or ""
+
+
+def _codex_token():
+    t = (_load_json(CODEX_AUTH) or {}).get("tokens") or {}
+    return t.get("access_token"), t.get("account_id")
+
+
+def has_login(agent):
+    return bool((_claude_token() if agent == "claude" else _codex_token())[0])
+
+
+def _get(url, headers):
+    req = urllib.request.Request(url, headers={"User-Agent": "pixelpet", "Accept": "application/json", **headers})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        return json.loads(r.read().decode("utf-8", "replace"))
+
+
+def _iso_epoch(v):
+    if isinstance(v, (int, float)):
+        return float(v)
+    try:
+        return datetime.datetime.fromisoformat(str(v).replace("Z", "+00:00")).timestamp()
+    except (TypeError, ValueError):
+        return None
+
+
+def fetch_claude():
+    tok, plan = _claude_token()
+    if not tok:
+        return None
+    d = _get(CLAUDE_URL, {"Authorization": f"Bearer {tok}", "anthropic-beta": "oauth-2025-04-20"})
+    limits = []
+    for key, label in (("five_hour", "5시간"), ("seven_day", "주간")):
+        v = d.get(key)
+        if isinstance(v, dict) and v.get("utilization") is not None:
+            lim = _limit(label, v["utilization"], _iso_epoch(v.get("resets_at")))
+            if lim:
+                limits.append(lim)
+    return {"ts": time.time(), "limits": limits, "plan": plan}
+
+
+def fetch_codex():
+    tok, account = _codex_token()
+    if not tok:
+        return None
+    headers = {"Authorization": f"Bearer {tok}"}
+    if account:
+        headers["ChatGPT-Account-Id"] = account
+    d = _get(CODEX_URL, headers)
+    rl = d.get("rate_limit") or {}
+    limits = []
+    for key in ("primary_window", "secondary_window"):
+        v = rl.get(key)
+        if isinstance(v, dict):
+            lim = _limit(window_label((v.get("limit_window_seconds") or 0) // 60), v.get("used_percent"),
+                         v.get("reset_at"))
+            if lim:
+                limits.append(lim)
+    return {"ts": time.time(), "limits": limits, "plan": d.get("plan_type") or ""}
+
+
+def _fetch(agent, fn):
+    try:
+        r = fn()
+        ok = bool(r and r["limits"])
+        if ok:
+            _online[agent] = r
+            _updated.set()
+    except Exception:
+        ok = False
+    with _lock:
+        _next_try[agent] = time.time() + (ONLINE_EVERY if ok else ONLINE_BACKOFF)
+        _busy.discard(agent)
+
+
+def refresh_online():
+    """필요하면 백그라운드에서 서버 사용량을 새로 받는다 (UI 를 막지 않음)."""
+    now = time.time()
+    for agent, fn in (("claude", fetch_claude), ("codex", fetch_codex)):
+        with _lock:
+            if agent in _busy or now < _next_try.get(agent, 0):
+                continue
+            _busy.add(agent)
+        threading.Thread(target=_fetch, args=(agent, fn), daemon=True).start()
+
+
+def take_updated():
+    """마지막 확인 이후 서버 값이 새로 들어왔는지."""
+    if _updated.is_set():
+        _updated.clear()
+        return True
+    return False
 
 
 def fmt_reset(ts):

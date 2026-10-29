@@ -71,8 +71,8 @@ To undo it, run `/pixelpet:shell --remove`.
 
 <p align="center"><img src="docs/images/usage.png" alt="usage tab" width="300"></p>
 
-Open the `사용량` (Usage) tab in the panel to see your plan limits. **Codex needs no setup**: PixelPet reads the logs Codex keeps on your machine.
-For Claude, run this once in Claude Code:
+Open the `사용량` (Usage) tab in the panel to see your plan limits. While the tab is open PixelPet asks each service every minute, so **usage from your other computers shows up too** (using the Claude Code / Codex login on this PC). **Codex needs no setup.**
+As a fallback when the service can't be reached, run this once in Claude Code:
 
 ```
 /pixelpet:usage
@@ -131,14 +131,23 @@ To undo it, run `/pixelpet:usage --remove`.
 
 - Claude Code hooks (`SessionStart`, `UserPromptSubmit`, `Stop`, `Notification`, `PreToolUse:AskUserQuestion`)
   and Codex hooks (`UserPromptSubmit`, `Stop`, `PermissionRequest`) send events to the pet app on `127.0.0.1:47321`.
-  Nothing leaves your machine.
-- Usage: for Claude, the status line's `rate_limits` are saved to `%LOCALAPPDATA%\PixelPet\data` and read from there.
-  For Codex, PixelPet reads the logs in `~/.codex/sessions`. Neither makes a network request.
+  Hook events never leave your machine.
+- Usage: only while the usage tab is open, PixelPet uses the login tokens in `~/.claude/.credentials.json` and `~/.codex/auth.json`
+  to ask the Anthropic (`api.anthropic.com`) and OpenAI (`chatgpt.com`) usage APIs once a minute. Tokens go nowhere else and are never refreshed.
+  If that fails it falls back to local records (the status line's `rate_limits` saved in `%LOCALAPPDATA%\PixelPet\data`, and the logs in `~/.codex/sessions`).
 - The PowerShell hook sends the command line and exit code to the pet app right before PSReadLine runs a command and when the next prompt appears (local only).
 - A Codex run started by Claude is linked to its Claude session through the inherited `CLAUDE_CODE_SESSION_ID` environment variable.
 - The app runs from a copy in `%LOCALAPPDATA%\PixelPet`, refreshed automatically at the next session start after a plugin update.
 
 ## Release notes
+
+### 0.4.3 — long Codex runs, usage from other PCs
+- **No more false "ended after 15 minutes"**: a Codex run started by Claude that worked for over 15 minutes was marked as ended for not responding.
+  Windows updates the modified time of a file that's held open lazily, so Codex looked idle while it was still writing its log.
+  Now PixelPet waits as long as the Codex process is alive, and when it can't find the process it checks the log file's real size
+  (waiting up to 2 hours while any Codex is running).
+- **Usage from other computers**: usage only came from records on this PC, so what you used elsewhere didn't show.
+  The usage tab now fetches it from the Claude and Codex usage APIs, falling back to local records.
 
 ### 0.4.2 — memory leak fix
 - **Symptom**: memory kept growing while the pet ran (about 7 GB a day, ~27 GB after four days), which could starve other programs.

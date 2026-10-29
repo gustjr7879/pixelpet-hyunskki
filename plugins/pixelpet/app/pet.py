@@ -292,12 +292,25 @@ def snippet(text, n):
     return t if len(t) <= n else t[: n - 1] + "…"
 
 
+def transcript_size(path):
+    """파일을 직접 열어 잰 실제 크기 (수정 시각·디렉터리 정보는 늦게 갱신될 수 있음)."""
+    if not path:
+        return None
+    try:
+        with open(path, "rb") as f:
+            return f.seek(0, 2)
+    except OSError:
+        return None
+
+
 # ── 상태 모델 ──────────────────────────────────────────────────────
 class Sub:
     def __init__(self, key, pid=None):
         self.key, self.pid = key, pid
         self.thread = None       # codex thread(session) id — 훅에서 알게 됨
         self.transcript = ""     # codex rollout 파일 — 멈춤(응답 없음) 감지용
+        self.size = None         # 마지막으로 본 rollout 파일 크기
+        self.active = time.time()  # rollout 파일이 마지막으로 커진 시각
         self.status = "working"
         self.message = ""
         self.updated = time.time()
@@ -959,6 +972,7 @@ class App:
     def build_usage(self):
         F = self.F
         self.usage_drawn = time.time()
+        usage.refresh_online()
         installed = usage.claude_relay_installed()
         for agent, tag, color, u in (("claude", " CLAUDE ", CLAUDE_C, usage.read_claude()),
                                      ("codex", " CODEX ", CODEX_C, usage.read_codex())):
@@ -980,7 +994,7 @@ class App:
                     self.usage_row(body, label, pct, resets, color)
                 tk.Frame(body, bg=CREAM, height=2 * F).pack()
                 continue
-            if agent == "claude" and not installed:
+            if agent == "claude" and not installed and not usage.has_login("claude"):
                 hint = "연결이 필요해요.\nClaude Code에서 /pixelpet:usage 를 실행하세요."
             elif agent == "claude":
                 hint = "Claude가 한 번 답하면 표시돼요.\n(Pro/Max 구독만 한도 정보가 있어요)"
@@ -988,7 +1002,7 @@ class App:
                 hint = "Codex 사용 기록이 아직 없어요.\nCodex를 한 번 쓰면 표시돼요."
             tk.Label(body, text=hint, font=self.f_small, bg=CREAM, fg="#6a6050", justify="left",
                      anchor="w").pack(fill="x", padx=6 * F, pady=4 * F)
-        tk.Label(self.inner, text=" 각 앱이 마지막으로 알려준 값이에요", font=self.f_small,
+        tk.Label(self.inner, text=" 서버 값 (안 되면 이 PC의 마지막 기록)", font=self.f_small,
                  bg="#808080", fg="#e8e8e8", anchor="w").pack(fill="x", pady=(2 * F, 0))
 
     def usage_row(self, parent, label, pct, resets, color):
@@ -1518,15 +1532,22 @@ class App:
     def scan_session(self, s, procs, kids):
         """Claude 세션 아래의 codex 프로세스 감시 + 멈춘 서브작업 정리."""
         now = time.time()
+        codex_alive = any(name == "codex.exe" for _pp, name in procs.values())
         for sub in s.subs.values():
             if sub.status != "working":
                 continue
-            try:
-                last = os.path.getmtime(sub.transcript) if sub.transcript else sub.updated
-            except OSError:
-                last = sub.updated
-            if now - max(last, sub.updated) > 15 * 60:
-                sub.status, sub.message = "done", sub.message or "(15분 넘게 응답이 없어 종료로 처리)"
+            # 프로세스가 살아 있으면 오래 걸려도 계속 작업 중 (끝나면 아래 pid 감시가 처리)
+            if sub.pid and procs.get(sub.pid, (0, ""))[1] == "codex.exe":
+                continue
+            # Windows 는 열린 채로 쓰이는 파일의 수정 시각을 늦게 갱신한다 → 실제 크기 변화로 활동 판단
+            size = transcript_size(sub.transcript)
+            if size is not None and size != sub.size:
+                sub.size, sub.active = size, now
+            idle = now - max(sub.active, sub.updated)
+            # pid 를 못 찾은 경우(Git Bash 경유 등) codex 가 어딘가 돌고 있으면 훨씬 오래 기다린다
+            limit = 2 * 3600 if codex_alive else 15 * 60
+            if idle > limit:
+                sub.status, sub.message = "done", sub.message or f"({limit // 60}분 넘게 응답이 없어 종료로 처리)"
                 self.dirty = True
         if not s.pid:
             return
@@ -1628,8 +1649,8 @@ class App:
                 for s in sorted(self.sessions.values(), key=lambda s: s.updated)[: len(self.sessions) - 80]:
                     if s.status not in ("working", "waiting"):
                         self.sessions.pop(s.key, None)
-            if self.view == "usage" and self.panel_visible and time.time() - self.usage_drawn > 20:
-                self.dirty = True   # 사용량 탭은 20초마다 다시 읽는다
+            if self.view == "usage" and self.panel_visible and                     (time.time() - self.usage_drawn > 20 or usage.take_updated()):
+                self.dirty = True   # 사용량 탭은 20초마다(또는 서버 값이 새로 오면) 다시 읽는다
         except Exception as ex:
             print("poll error:", ex, file=sys.stderr)
         self.root.after(1500, self.poll)
